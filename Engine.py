@@ -1,7 +1,6 @@
 import math
 from random import random
 import pygame
-import pygame_gui
 
 from Vehicle import Vehicle
 
@@ -20,6 +19,9 @@ class Engine:
         self.a = a
         self.b = b
         self.leading_car_acc = 0
+        self.paused=False
+        self.rectangles_colour=[]
+        self.WHITE, self.GRAY, self.BLUE, self.BLACK, self.RED = (255, 255, 255), (150, 150, 150), (0, 100, 255), (0, 0, 0), (255, 0, 0)
 
     def _initialize(self):
         for i in range(self.n_vehicles):
@@ -27,6 +29,7 @@ class Engine:
             vehLen = 3 + 4 * random()
             veh = Vehicle(xPos=xPos, veh_length=vehLen)
             self.vehicles_tab.append(veh)
+            self.rectangles_colour.append(self.BLACK)
 
     def _desired_distance(self, v_i, v_i_prev):
         return self.minimal_distance + v_i * self.T + ((v_i - v_i_prev) * v_i / (2 * math.sqrt(self.a * self.b)))
@@ -62,15 +65,26 @@ class Engine:
             curr.setSpeed(new_speed)
             curr.setXPos(curr.getXPos() - new_speed * dt)
 
+    def _check_collisions(self):
+        for i in range(len(self.vehicles_tab) - 1):
+            rear_car = self.vehicles_tab[i + 1]
+            front_car = self.vehicles_tab[i]
+
+            rear_x = rear_car.getXPos()
+            front_len = front_car.getVehLength()
+            front_x = front_car.getXPos()
+
+            if front_x + front_len > rear_x:
+                print(f"Kolizja: pojazd {i + 1} uderzył w pojazd {i}")
+                self.rectangles_colour[i+1]=self.RED
+                self.paused=True
+
     def run(self):
         self._initialize()
         pygame.init()
         screen = pygame.display.set_mode((1200, 700))
         pygame.display.set_caption('Symulacja ruchu drogowego')
 
-        # Kolory i parametry
-        WIDTH, HEIGHT = 1200, 700
-        WHITE, GRAY, BLUE, BLACK = (255, 255, 255), (150, 150, 150), (0, 100, 255), (0, 0, 0)
         slider_x, slider_y, slider_width, slider_height, handle_radius = 100, 100, 400, 10, 10
         min_val, max_val = 0.0, self.b
         dragging = False
@@ -78,23 +92,22 @@ class Engine:
         # Tło
         background = pygame.image.load("road_background2.png").convert()
         bg_width = background.get_width()
-        x1, x2 = 0, -bg_width
 
         clock = pygame.time.Clock()
 
         def draw_slider(value):
-            pygame.draw.rect(screen, GRAY, (slider_x, slider_y, slider_width, slider_height))
+            pygame.draw.rect(screen, self.GRAY, (slider_x, slider_y, slider_width, slider_height))
             rel_x = int(((value - min_val) / (max_val - min_val)) * slider_width)
             handle_x = slider_x + rel_x
-            pygame.draw.circle(screen, BLUE, (handle_x, slider_y + slider_height // 2), handle_radius)
+            pygame.draw.circle(screen, self.BLUE, (handle_x, slider_y + slider_height // 2), handle_radius)
             font = pygame.font.SysFont(None, 24)
-            text = font.render(f'Siła hamowania pierwszego samochodu: {value:.2f}', True, BLACK)
+            text = font.render(f'Siła hamowania pierwszego samochodu: {value:.2f}', True, self.BLACK)
             screen.blit(text, (slider_x, slider_y - 30))
 
         while self.running:
-            dt = clock.tick(60) / 1000.0  # zamień na sekundy
+            dt = clock.tick(60) / 1000.0
 
-            screen.fill(WHITE)
+            screen.fill(self.WHITE)
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -112,19 +125,21 @@ class Engine:
 
             draw_slider(self.leading_car_acc)
 
-            # Zapętlające się tło
             x1 = (0 - self.vehicles_tab[0].getXPos() * 10) % bg_width
             x2 = x1 - bg_width
             screen.blit(background, (x1, 250))
             screen.blit(background, (x2, 250))
 
-            # Rysowanie pojazdów
-            for veh in self.vehicles_tab:
+            for ind,veh in enumerate(self.vehicles_tab):
                 x = veh.getXPos() * 10 - self.vehicles_tab[0].getXPos() * 10 + 10
                 rect = pygame.Rect(x, 500, veh.getVehLength() * 10, 50)
-                pygame.draw.rect(screen, BLACK, rect)
+                pygame.draw.rect(screen, self.rectangles_colour[ind], rect)
+
 
             pygame.display.flip()
-            self._update_vehicles_params(dt)
 
-        pygame.quit()
+            if not self.paused:
+                self._check_collisions()
+                self._update_vehicles_params(dt)
+
+        # pygame.quit()

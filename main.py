@@ -1,8 +1,6 @@
 from Engine import Engine
-from Vehicle import Vehicle
 import pygame
 import pygame_gui
-import time
 
 
 def get_simulation_parameters():
